@@ -1,0 +1,4 @@
+stable_baselines3~=2.4.0
+numpy~=1.26.4
+gym~=0.26.2
+py4j~=0.10.9.7
