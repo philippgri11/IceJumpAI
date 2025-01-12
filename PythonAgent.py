@@ -8,6 +8,10 @@ import gymnasium as gym
 import game.main as myMain
 
 import pygame
+import math
+
+from game.constants import GAME_WIDTH, GAME_HEIGHT, WATER_HEIGHT
+
 
 class IceJumpEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -40,6 +44,8 @@ class IceJumpEnv(gym.Env):
 
         self.won = 0
         self.lose = 0
+        self.waveX = 0
+        self.waveY = 0
         # Beobachtungsraum:
         # Spieler: 10 Werte
         # Blocks: 40 * 3 = 120 Werte
@@ -57,7 +63,7 @@ class IceJumpEnv(gym.Env):
     def setupWindow(self):
         # Initialisierung
         pygame.init()
-        self.font = pygame.font.Font(None, 20)
+        self.font = pygame.font.Font(None, 30)
 
         # Bildschirm erstellen
         self.screen = pygame.display.set_mode((640, 480))
@@ -168,7 +174,8 @@ class IceJumpEnv(gym.Env):
 
     def render(self, mode='human'):
         try:
-            self.screen.fill((0, 0, 0))
+            # Hintergrund mit Farbverlauf zeichnen
+            self.draw_vertical_gradient(self.screen, (100, 150, 200), (160, 225, 254))
 
             for index, value in enumerate(self.entry_point.level.getBlocks()):
                 block_surface = pygame.Surface((value.width, value.height), pygame.SRCALPHA)  # Transparente Oberfläche
@@ -185,9 +192,34 @@ class IceJumpEnv(gym.Env):
 
             text = "Zeit: "+str(self.entry_point.level.time/1000)+" s"
             text_surface = self.font.render(text, True, (255, 255, 255))
-            self.screen.blit(text_surface, (290, 50))
+            self.screen.blit(text_surface, (290, 10))
 
-            time.sleep(0.01)
+            text = "Spieler 1: "+str(self.entry_point.level.playerOne.getName())+""
+            text_surface = self.font.render(text, True, (128, 0, 0))
+            self.screen.blit(text_surface, (30, 10))
+
+            text = "Spieler 2: "+str(self.entry_point.level.playerTwo.getName())+""
+            text_surface = self.font.render(text, True, (0, 128, 0))
+            self.screen.blit(text_surface, (440, 10))
+
+            self.waveX += 0.1
+            if self.waveX >= 90:
+                self.waveX = 0
+
+            # Sinuswelle zeichnen
+            points = []
+            for i in range(GAME_WIDTH + 160):
+                y = int(math.sin(math.radians(i << 3)) * 6) + 20 + GAME_HEIGHT - WATER_HEIGHT - 32  # Berechnung der Y-Position
+                points.append((i - self.waveX, y))
+                #pygame.draw.rect(self.screen, (0, 182, 221), (i - self.waveX, y, 1, 38))  # Rechteck zeichnen
+
+            points.append((GAME_WIDTH, GAME_HEIGHT))  # Unten rechts
+            points.append((0, GAME_HEIGHT))      # Unten links
+            pygame.draw.polygon(self.screen, (0, 182, 221), points)
+
+            #pygame.draw.rect(self.screen, (0, 182, 221), (0, GAME_HEIGHT - WATER_HEIGHT, GAME_WIDTH, WATER_HEIGHT))  # Rechteck zeichnen
+
+            time.sleep(0.005)
         except pygame.error as e:
             # Behandle spezifische Pygame-Fehler
             print(f"Pygame-Fehler: {e}")
@@ -197,6 +229,20 @@ class IceJumpEnv(gym.Env):
         finally:
             # Bildschirm aktualisieren
             pygame.display.flip()
+
+    def draw_vertical_gradient(self, surface, color_top, color_bottom):
+        """Zeichnet einen vertikalen Farbverlauf von `color_top` nach `color_bottom`."""
+        height = surface.get_height()
+        width = surface.get_width()
+
+        # Schrittweise Farbmischung
+        for y in range(height):
+            # Interpolation der Farben
+            r = color_top[0] + (color_bottom[0] - color_top[0]) * y // height
+            g = color_top[1] + (color_bottom[1] - color_top[1]) * y // height
+            b = color_top[2] + (color_bottom[2] - color_top[2]) * y // height
+
+            pygame.draw.line(surface, (r, g, b), (0, y), (width, y))
 
     def close(self):
         pygame.quit()
@@ -231,6 +277,7 @@ class IceJumpEnv(gym.Env):
         vecX1 = self._normalize_pos_y(enemyPlayer.vecX)
         vecY1 = self._normalize_pos_y(enemyPlayer.vecY)
 
+        #hole dir den nächsten Block zum Spieler
         index = -1
         for i, block in enumerate(self.entry_point.level.getBlocks()):
             bx = self._normalize_pos_x(block.x)
@@ -243,6 +290,7 @@ class IceJumpEnv(gym.Env):
         bx = -1
         by = -1
         bhit = -1
+        #gibt es einen Block nah am Spieler, dann setze die Werte
         if index >= 0:
             bx = self._normalize_pos_x(self.entry_point.level.getBlocks()[index].x)
             by = self._normalize_pos_y(self.entry_point.level.getBlocks()[index].y)

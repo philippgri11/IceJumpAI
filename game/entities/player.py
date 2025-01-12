@@ -21,18 +21,17 @@ class Player(Entity):
         width: float = PLAYER_WIDTH
         height: float = PLAYER_HEIGHT
 
-        print(x, y, width, height)
         super().__init__(x, y, width, height, 0, 0)
 
     def getName(self):
         if self.ai is None:
-            return "Human"
+            return "TrainedBot"
         return self.ai.name
 
     def setAI(self, ai: AI):
         self.ai = ai
         if self.ai is None:
-            self.name = "Human"
+            self.name = "TrainedBot"
         else:
             self.name = self.ai.name
 

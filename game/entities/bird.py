@@ -5,7 +5,7 @@ from game.constants import GAME_WIDTH, GAME_HEIGHT, ICEBLOCK_WIDTH, WATER_HEIGHT
 from game.entities.entity import Entity
 
 @dataclass
-class Player(Entity):
+class Bird(Entity):
     normalSpeedVecX: float = 0
     normalSpeedVecY: float = 0
 
