@@ -1,4 +1,3 @@
-import json
 import time
 
 from typing import Optional
@@ -55,6 +54,7 @@ class IceJumpEnv(gym.Env):
         self.time_step = 0
         self.sumVec = 0
 
+    def setupWindow(self):
         # Initialisierung
         pygame.init()
         self.font = pygame.font.Font(None, 20)
@@ -80,7 +80,6 @@ class IceJumpEnv(gym.Env):
         return obs, info
 
     def step(self, action):
-
         reward = 0
 
         # Aktion durchführen
@@ -98,71 +97,6 @@ class IceJumpEnv(gym.Env):
         obs = self._get_obs()
         self.done = self.entry_point.isGameOver()
 
-        '''
-        state_json = json.loads(self.entry_point.getState())
-        players = state_json["players"]
-        winner = state_json.get("winner", None)
-
-        width = self._normalize_pos_x(players[self.player_index]["width"])
-        height = width
-
-        found = False
-
-        add = 2 * self.player_index
-        bwidth = 0
-        blocks = state_json.get("blocks", [])
-        for i, block in enumerate(blocks[:self.MAX_BLOCKS]):
-            bwidth = self._normalize_pos_x(block["width"])
-            break
-        if (obs[add] + width > obs[4]) and (obs[add] <= obs[4] + bwidth) and (obs[add + 1] + height/2 < obs[5]) :
-            found = True
-
-        enemy = 1
-        if self.player_index==1:
-            enemy = 0
-
-        # Schrittweise Belohnung für Zeit
-        reward += 0.1 * self.time_step
-
-        # Belohnung für Stabilität (auf Eisblock bleiben)
-        if found:
-            reward += 10
-        else:
-            reward -= 10  # Sofortige Strafe bei gefährlichem Verhalten
-
-        if players[self.player_index]["vecY"] < 0:
-            # Bestrafung für Entfernung vom Gegner
-            distance = abs(players[self.player_index]["x"] - players[enemy]["x"])
-            reward -= min(distance * 0.05, 5.0)  # Proportionale Strafe, maximal 5
-
-        # Belohnung für Annäherung an den Gegner
-        if vec_x > 0 and players[self.player_index]["x"] < players[enemy]["x"]:
-            reward += 1
-        elif vec_x < 0 and players[self.player_index]["x"] > players[enemy]["x"]:
-            reward += 1
-
-        # Belohnung, wenn über dem Gegner oder Bestrafung, wenn unter dem Gegner
-        if players[self.player_index]["x"] + players[self.player_index]["width"] > players[enemy]["x"] and players[self.player_index]["x"] <= players[enemy]["x"] + players[self.player_index]["width"]:
-            if players[self.player_index]["y"] + players[self.player_index]["height"] < players[enemy]["y"]:
-                reward += 100
-
-            if players[self.player_index]["y"] > players[enemy]["y"] + players[enemy]["height"]:
-                reward -= 30
-
-        # Auswertung, wenn jemand gewonnen hat
-        if self.done and winner is not None:
-            ratio = str(self.won) + " / " + str(self.lose)
-            player_name = state_json["players"][self.player_index]["name"]
-            if winner == player_name:
-                self.won += 1
-                reward += 2000
-                print("OMG OMG, gewonnen gegen ", state_json["players"][enemy]["name"], self.time_step, int(self.sumVec), int(players[self.player_index]["x"]), int(players[enemy]["x"]), ratio)
-            else:
-                self.lose += 1
-                print("Verloren ", winner, self.player_index, self.time_step, int(self.sumVec), int(players[self.player_index]["x"]), int(players[enemy]["x"]), ratio)
-                reward -= 500  # Konstante Strafe bei Verlust
-        '''
-
         winner = myMain.winnerName()
 
         enemyIndex = 1
@@ -175,18 +109,14 @@ class IceJumpEnv(gym.Env):
 
         found = False
 
-        add = 0
         bwidth = 0
         blocks = myMain.getLevel().getBlocks()
         for i, block in enumerate(blocks[:self.MAX_BLOCKS]):
             bwidth = self._normalize_pos_x(block.width)
             break
-        if (obs[add] + width > obs[4]) and (obs[add] <= obs[4] + bwidth) and (obs[add + 1] + height/2 < obs[5]) :
+        # ist der Spieler über dem nächsten Eisblock?
+        if (obs[0] + width > obs[4]) and (obs[0] <= obs[4] + bwidth) and (obs[1] + height/2 < obs[5]) :
             found = True
-
-        enemy = 1
-        if self.player_index==1:
-            enemy = 0
 
         # Schrittweise Belohnung für Zeit
         reward += 0.1 * self.time_step
@@ -197,6 +127,7 @@ class IceJumpEnv(gym.Env):
         else:
             reward -= 10  # Sofortige Strafe bei gefährlichem Verhalten
 
+        # Wenn er hoch springt, soll er in Richtung Gegner gehen
         if myPlayer.vecY < 0:
             # Bestrafung für Entfernung vom Gegner
             distance = abs(myPlayer.x - myEnemy.x)
@@ -214,7 +145,7 @@ class IceJumpEnv(gym.Env):
                 reward += 100
 
             if myPlayer.y > myEnemy.y + myEnemy.height:
-                reward -= 30
+                reward -= 100
 
         # Auswertung, wenn jemand gewonnen hat
         if self.done and winner is not None:
@@ -222,13 +153,13 @@ class IceJumpEnv(gym.Env):
             if winner == player_name:
                 self.won += 1
                 ratio = str(self.won) + " / " + str(self.lose)
-                reward += 2000
+                reward += 20000
                 print("OMG OMG, gewonnen gegen ", myEnemy.name, self.time_step, int(self.sumVec), int(myPlayer.x), int(myEnemy.x), ratio)
             else:
                 self.lose += 1
                 ratio = str(self.won) + " / " + str(self.lose)
                 print("Verloren ", winner, self.player_index, self.time_step, int(self.sumVec), int(myPlayer.x), int(myEnemy.x), ratio)
-                reward -= 500  # Konstante Strafe bei Verlust
+                reward -= 5000  # Konstante Strafe bei Verlust
 
         info = {}
         #print("reward ", reward, found, self.time_step, vec_x, obs)
@@ -236,28 +167,36 @@ class IceJumpEnv(gym.Env):
         return obs, reward, self.done, False, info
 
     def render(self, mode='human'):
-        self.screen.fill((0, 0, 0))
+        try:
+            self.screen.fill((0, 0, 0))
 
-        for index, value in enumerate(self.entry_point.level.getBlocks()):
-            block_surface = pygame.Surface((value.width, value.height), pygame.SRCALPHA)  # Transparente Oberfläche
-            block_surface.fill((255, 255, 255, 128))  # white mit Alpha = 128
-            self.screen.blit(block_surface, (value.x, value.y))
+            for index, value in enumerate(self.entry_point.level.getBlocks()):
+                block_surface = pygame.Surface((value.width, value.height), pygame.SRCALPHA)  # Transparente Oberfläche
+                block_surface.fill((255, 255, 255, 128))  # white mit Alpha = 128
+                self.screen.blit(block_surface, (value.x, value.y))
 
-            pygame.draw.rect(self.screen, (255, 255, 255), (value.x, value.y, value.width, value.height), width=2)
+                pygame.draw.rect(self.screen, (255, 255, 255), (value.x, value.y, value.width, value.height), width=2)
 
-        playerOne = self.entry_point.level.playerOne
-        pygame.draw.rect(self.screen, (255, 0, 0), (playerOne.x, playerOne.y, playerOne.width, playerOne.height))
+            playerOne = self.entry_point.level.playerOne
+            pygame.draw.rect(self.screen, (255, 0, 0), (playerOne.x, playerOne.y, playerOne.width, playerOne.height))
 
-        playerTwo = self.entry_point.level.playerTwo
-        pygame.draw.rect(self.screen, (0, 255, 0), (playerTwo.x, playerTwo.y, playerTwo.width, playerTwo.height))
+            playerTwo = self.entry_point.level.playerTwo
+            pygame.draw.rect(self.screen, (0, 255, 0), (playerTwo.x, playerTwo.y, playerTwo.width, playerTwo.height))
 
-        text = "Zeit: "+str(self.entry_point.level.time/1000)+" s"
-        text_surface = self.font.render(text, True, (255, 255, 255))
-        self.screen.blit(text_surface, (290, 50))
+            text = "Zeit: "+str(self.entry_point.level.time/1000)+" s"
+            text_surface = self.font.render(text, True, (255, 255, 255))
+            self.screen.blit(text_surface, (290, 50))
 
-        time.sleep(0.01)
-        # Bildschirm aktualisieren
-        pygame.display.flip()
+            time.sleep(0.01)
+        except pygame.error as e:
+            # Behandle spezifische Pygame-Fehler
+            print(f"Pygame-Fehler: {e}")
+        except Exception as e:
+            # Behandle allgemeine Fehler
+            print(f"Ein Fehler ist aufgetreten: {e}")
+        finally:
+            # Bildschirm aktualisieren
+            pygame.display.flip()
 
     def close(self):
         pygame.quit()
@@ -275,80 +214,6 @@ class IceJumpEnv(gym.Env):
         return gtype / self.MAX_GOODIE_TYPE
 
     def _get_obs(self):
-        '''
-        state_str = self.entry_point.getState()
-        state_json = json.loads(state_str)
-        players = state_json["players"]
-
-        width = self._normalize_pos_x(players[0]["width"])
-
-        x0 = self._normalize_pos_x(players[0]["x"])
-        y0 = self._normalize_pos_y(players[0]["y"])
-        vecX0 = self._normalize_pos_y(players[0]["vecX"])
-        vecY0 = self._normalize_pos_y(players[0]["vecY"])
-        x1 = self._normalize_pos_x(players[1]["x"])
-        y1 = self._normalize_pos_y(players[1]["y"])
-        vecX1 = self._normalize_pos_y(players[1]["vecX"])
-        vecY1 = self._normalize_pos_y(players[1]["vecY"])
-
-
-        bwidth = 0
-        blocks = state_json.get("blocks", [])
-        index = -1
-        for i, block in enumerate(blocks[:self.MAX_BLOCKS]):
-            bx = self._normalize_pos_x(block["x"])
-            bwidth = self._normalize_pos_x(block["width"])
-
-            if (index < 0) or ((self._normalize_pos_x(players[self.player_index]["x"]) + width > bx) and (self._normalize_pos_x(players[self.player_index]["x"]) < bx + bwidth)) :
-                if index < 0 or (abs(self._normalize_pos_x(blocks[index]["x"]) - self._normalize_pos_x(players[self.player_index]["x"])) > abs(bx - self._normalize_pos_x(players[self.player_index]["x"]))):
-                    index = i
-
-        bx = -1
-        by = -1
-        bhit = -1
-        if index >= 0:
-            bx = self._normalize_pos_x(blocks[index]["x"])
-            by = self._normalize_pos_y(blocks[index]["y"])
-            bhit = self._normalize_pos_y(blocks[index]["hits"])
-
-        #print("bx index etc", bx, bwidth, x0, x1, width)
-
-        obs = np.array([x0, y0, x1, y1, bx, by, bhit, vecX0, vecY0, vecX1, vecY1], dtype=np.float32)
-        '''
-        '''
-        # Spielerzustand normalisieren
-        x0 = self._normalize_pos_x(players[0]["x"])
-        y0 = self._normalize_pos_y(players[0]["y"])
-        width0 = self._normalize_pos_x(players[0]["width"])
-        height0 = self._normalize_pos_y(players[0]["height"])
-        v0 = 1.0 if players[0]["visible"] else 0.0
-        x1 = self._normalize_pos_x(players[1]["x"])
-        y1 = self._normalize_pos_y(players[1]["y"])
-        v1 = 1.0 if players[1]["visible"] else 0.0
-        width1 = self._normalize_pos_x(players[1]["width"])
-        height1 = self._normalize_pos_y(players[1]["height"])
-
-        obs_players = np.array([x0, y0, width0, height0, v0, x1, y1, width1, height1, v1], dtype=np.float32)
-
-        # Blocks
-        blocks = state_json.get("blocks", [])
-        obs_blocks = []
-        for i, block in enumerate(blocks[:self.MAX_BLOCKS]):
-            bx = self._normalize_pos_x(block["x"])
-            by = self._normalize_pos_y(block["y"])
-            hits = self._normalize_hits(block["hits"])
-            obs_blocks.extend([bx, by, hits])
-        # Auffüllen mit Nullen
-        while len(obs_blocks) < self.MAX_BLOCKS * 3:
-            obs_blocks.append(-1.0)
-
-        obs = np.concatenate([obs_players,
-                              np.array(obs_blocks, dtype=np.float32)])#,
-                              #np.array(obs_goodies, dtype=np.float32),
-                              #np.array(obs_birds, dtype=np.float32)])
-                              
-        '''
-
         aiPlayer = self.entry_point.level.getPlayerOne()
         enemyPlayer = self.entry_point.level.getPlayerTwo()
         if self.player_index == 1:
