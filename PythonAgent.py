@@ -60,13 +60,18 @@ class IceJumpEnv(gym.Env):
         self.time_step = 0
         self.sumVec = 0
 
+        self.block_surface = self.create_rounded_rect_surface(30, 30, (255, 255, 255, 128), (255, 255, 255), 3, False)
+        self.playerOne_surface = self.create_rounded_rect_surface(30, 30, (255, 0, 0), (0, 0, 0), 3, True)
+        self.playerTwo_surface = self.create_rounded_rect_surface(30, 30, (0, 255, 0), (0, 0, 0), 3, True)
+        self.background = self.draw_vertical_gradient(GAME_WIDTH, GAME_HEIGHT, (100, 150, 200), (160, 225, 254))
+
     def setupWindow(self):
         # Initialisierung
         pygame.init()
-        self.font = pygame.font.Font(None, 30)
+        self.font = pygame.font.Font(None, 25)
 
         # Bildschirm erstellen
-        self.screen = pygame.display.set_mode((640, 480))
+        self.screen = pygame.display.set_mode((GAME_WIDTH, GAME_HEIGHT))
 
     def reset(self, seed: Optional[int] = None):
         super().reset(seed=seed)
@@ -129,9 +134,9 @@ class IceJumpEnv(gym.Env):
 
         # Belohnung für Stabilität (auf Eisblock bleiben)
         if found:
-            reward += 10
+            reward += 100
         else:
-            reward -= 10  # Sofortige Strafe bei gefährlichem Verhalten
+            reward -= 100  # Sofortige Strafe bei gefährlichem Verhalten
 
         # Wenn er hoch springt, soll er in Richtung Gegner gehen
         if myPlayer.vecY < 0:
@@ -141,17 +146,17 @@ class IceJumpEnv(gym.Env):
 
         # Belohnung für Annäherung an den Gegner
         if vec_x > 0 and myPlayer.x < myEnemy.x:
-            reward += 1
+            reward += 10
         elif vec_x < 0 and myPlayer.x > myEnemy.x:
-            reward += 1
+            reward += 10
 
         # Belohnung, wenn über dem Gegner oder Bestrafung, wenn unter dem Gegner
         if myPlayer.x + myPlayer.width > myEnemy.x and myPlayer.x <= myEnemy.x + myPlayer.width:
             if myPlayer.y + myPlayer.height < myEnemy.y:
-                reward += 100
+                reward += 20000
 
             if myPlayer.y > myEnemy.y + myEnemy.height:
-                reward -= 100
+                reward -= 5000
 
         # Auswertung, wenn jemand gewonnen hat
         if self.done and winner is not None:
@@ -172,23 +177,47 @@ class IceJumpEnv(gym.Env):
         #print("Step ", vec_x, action, reward, info)
         return obs, reward, self.done, False, info
 
+    # Abgerundeten Eisblock vorzeichnen
+    def create_rounded_rect_surface(self, width, height, color, colorBorder, radius, eyes):
+        surface = pygame.Surface((width, height), pygame.SRCALPHA)  # Transparente Surface
+        pygame.draw.rect(surface, color, (0, 0, width, height), border_radius=radius)
+        pygame.draw.rect(surface, colorBorder, (0, 0, width, height), width=1, border_radius=radius)
+
+        if eyes is True:
+            pygame.draw.rect(surface, colorBorder, (width/2 - 4, height/2 - 6, 3, 9), border_radius=radius)
+            pygame.draw.rect(surface, colorBorder, (width/2 + 1, height/2 - 6, 3, 9), border_radius=radius)
+
+        return surface
+
+
+    def draw_vertical_gradient(self, width, height, color_top, color_bottom):
+        """Zeichnet einen vertikalen Farbverlauf von `color_top` nach `color_bottom`."""
+        gradient_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+
+        # Schrittweise Farbmischung
+        for y in range(height):
+            # Interpolation der Farben
+            r = color_top[0] + (color_bottom[0] - color_top[0]) * y // height
+            g = color_top[1] + (color_bottom[1] - color_top[1]) * y // height
+            b = color_top[2] + (color_bottom[2] - color_top[2]) * y // height
+
+            pygame.draw.line(gradient_surface, (r, g, b), (0, y), (width, y))
+        return gradient_surface
+
     def render(self, mode='human'):
         try:
             # Hintergrund mit Farbverlauf zeichnen
-            self.draw_vertical_gradient(self.screen, (100, 150, 200), (160, 225, 254))
+            self.screen.blit(self.background, (0, 0))
+            #self.draw_vertical_gradient(self.screen, (100, 150, 200), (160, 225, 254))
 
             for index, value in enumerate(self.entry_point.level.getBlocks()):
-                block_surface = pygame.Surface((value.width, value.height), pygame.SRCALPHA)  # Transparente Oberfläche
-                block_surface.fill((255, 255, 255, 128))  # white mit Alpha = 128
-                self.screen.blit(block_surface, (value.x, value.y))
-
-                pygame.draw.rect(self.screen, (255, 255, 255), (value.x, value.y, value.width, value.height), width=2)
+                self.screen.blit(self.block_surface, (value.x, value.y))
 
             playerOne = self.entry_point.level.playerOne
-            pygame.draw.rect(self.screen, (255, 0, 0), (playerOne.x, playerOne.y, playerOne.width, playerOne.height))
+            self.screen.blit(self.playerOne_surface, (playerOne.x, playerOne.y))
 
             playerTwo = self.entry_point.level.playerTwo
-            pygame.draw.rect(self.screen, (0, 255, 0), (playerTwo.x, playerTwo.y, playerTwo.width, playerTwo.height))
+            self.screen.blit(self.playerTwo_surface, (playerTwo.x, playerTwo.y))
 
             text = "Zeit: "+str(self.entry_point.level.time/1000)+" s"
             text_surface = self.font.render(text, True, (255, 255, 255))
@@ -229,20 +258,6 @@ class IceJumpEnv(gym.Env):
         finally:
             # Bildschirm aktualisieren
             pygame.display.flip()
-
-    def draw_vertical_gradient(self, surface, color_top, color_bottom):
-        """Zeichnet einen vertikalen Farbverlauf von `color_top` nach `color_bottom`."""
-        height = surface.get_height()
-        width = surface.get_width()
-
-        # Schrittweise Farbmischung
-        for y in range(height):
-            # Interpolation der Farben
-            r = color_top[0] + (color_bottom[0] - color_top[0]) * y // height
-            g = color_top[1] + (color_bottom[1] - color_top[1]) * y // height
-            b = color_top[2] + (color_bottom[2] - color_top[2]) * y // height
-
-            pygame.draw.line(surface, (r, g, b), (0, y), (width, y))
 
     def close(self):
         pygame.quit()
