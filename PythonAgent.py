@@ -165,9 +165,9 @@ class IceJumpEnv(gym.Env):
             else:
                 # Belohnung für Annäherung an den Gegner
                 if vec_x > 0 and myPlayer.x < myEnemy.x:
-                    reward += 10
+                    reward += 200
                 elif vec_x < 0 and myPlayer.x > myEnemy.x:
-                    reward += 10
+                    reward += 200
 
         # Auswertung, wenn jemand gewonnen hat
         if self.done and winner is not None:
