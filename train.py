@@ -25,7 +25,7 @@ env.reset(42)
 # Modell erstellen und trainieren
 #model = PPO("MlpPolicy", env, verbose=1, device="cpu", tensorboard_log=log_dir, ent_coef=0.01, learning_rate=1e-5, n_steps=2048, clip_range=0.1)
 model = SAC("MlpPolicy", env, batch_size=1024, device="auto", verbose=1, tensorboard_log=log_dir)
-#model = SAC.load("models/SAC_1736708027/300000.zip", env=env, batch_size=1024, device="auto", verbose=1, tensorboard_log=log_dir)
+#model = SAC.load("models/SAC_1736971447/600000.zip", env=env, batch_size=1024, device="auto", verbose=1, tensorboard_log=log_dir)
 
 
 TIMESTAMP = 10000
@@ -34,6 +34,8 @@ for i in range(1,300):
     # Modell speichern
     if i % 10 == 0:
         model.save(f"{models_dir}/{TIMESTAMP*i}")
+
+model.save(f"{models_dir}/{TIMESTAMP*i}")
 
 env.setupWindow()
 
