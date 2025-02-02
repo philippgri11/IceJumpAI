@@ -39,8 +39,8 @@ class IceJumpEnv(gym.Env):
         self.player_index = player_index
 
         # Aktionen: float-Wert für die horizontale Geschwindigkeit
-        self.action_space = gym.spaces.Box(low=-0.16, high=0.16, shape=(1,), dtype=np.float32)
-        #self.action_space = gym.spaces.Discrete(3, start=0, seed=42)
+        #self.action_space = gym.spaces.Box(low=-0.16, high=0.16, shape=(1,), dtype=np.float32)
+        self.action_space = gym.spaces.Discrete(3, start=0, seed=42)
 
         self.won = 0
         self.lose = 0
@@ -96,8 +96,8 @@ class IceJumpEnv(gym.Env):
         reward = 0
 
         # Aktion durchführen
-        vec_x = float(action[0])
-        #vec_x = float(action-1) * 0.16
+        #vec_x = float(action[0])
+        vec_x = float(action-1) * 0.16
         #print(vec_x, action)
         self.sumVec += vec_x
         self.entry_point.setPlayerAction(self.player_index, vec_x)
@@ -145,36 +145,45 @@ class IceJumpEnv(gym.Env):
 
         # Belohnung, wenn über dem Gegner oder Bestrafung, wenn unter dem Gegner
         if myPlayer.x + myPlayer.width > myEnemy.x and myPlayer.x <= myEnemy.x + myPlayer.width:
-            if myPlayer.y + myPlayer.height < myEnemy.y:
+            if myPlayer.y + myPlayer.height/2 < myEnemy.y:
                 reward += 20000 - abs(myPlayer.x - myEnemy.x) * 50
 
+                # Belohnung für Annäherung an den Gegner
+                if vec_x > 0 and myPlayer.x < myEnemy.x:
+                    reward += 3000
+                elif vec_x < 0 and myPlayer.x > myEnemy.x:
+                    reward += 3000
+
             if myPlayer.y > myEnemy.y + myEnemy.height:
-                reward -= 5000
+                reward -= 20000
+
+                # Belohnung um vom Gegner wegzukommen
+                if (vec_x > 0 and myPlayer.x > myEnemy.x) or (vec_x < 0 and myPlayer.x < myEnemy.x):
+                    reward += 5000
         else:
             # Bestrafung/Belohnung für Entfernung vom Gegner
             distance = abs(myPlayer.x - myEnemy.x)
             reward += myPlayer.width - distance  # Proportionale Strafe
 
             # Wenn er sinkt, soll er auf einen Eisblock
-            if myPlayer.vecY >= 0:
-                # Belohnung für Stabilität (auf Eisblock bleiben)
-                if found:
-                    reward += 4000
-                else:
-                    reward -= 5000  # Sofortige Strafe bei gefährlichem Verhalten
+            #if myPlayer.vecY >= 0:
+            # Belohnung für Stabilität (auf Eisblock bleiben)
+            if found:
+                reward += 5000
+            else:
+                reward -= 10000  # Sofortige Strafe bei gefährlichem Verhalten
 
-                if not found:
-                    if obs[8] < obs[0] and obs[4] < 0:
-                        reward += 2500
-                    if obs[8] > obs[0] and obs[4] > 0:
-                        reward += 2500
+            if not found:
+                if obs[8] < obs[0] and obs[4] < 0:
+                    reward += 2500
+                if obs[8] > obs[0] and obs[4] > 0:
+                    reward += 2500
 
-
-        # Belohnung für Annäherung an den Gegner
-        if vec_x > 0 and myPlayer.x < myEnemy.x:
-            reward += 2000
-        elif vec_x < 0 and myPlayer.x > myEnemy.x:
-            reward += 2000
+            # Belohnung für Annäherung an den Gegner
+            if vec_x > 0 and myPlayer.x < myEnemy.x:
+                reward += 3000
+            elif vec_x < 0 and myPlayer.x > myEnemy.x:
+                reward += 3000
 
         # Auswertung, wenn jemand gewonnen hat
         if self.done and winner is not None:
@@ -188,7 +197,7 @@ class IceJumpEnv(gym.Env):
                 self.lose += 1
                 ratio = str(self.won) + " / " + str(self.lose+self.won)
                 print("Verloren ", winner, self.player_index, self.time_step, int(self.sumVec), int(myPlayer.x), int(myEnemy.x), ratio)
-                reward = 5000  # Konstante Strafe bei Verlust
+                reward = -200000  # Konstante Strafe bei Verlust
 
         info = {}
         #print("reward ", reward, found, self.time_step, vec_x, obs)
@@ -279,7 +288,7 @@ class IceJumpEnv(gym.Env):
 
             #pygame.draw.rect(self.screen, (0, 182, 221), (0, GAME_HEIGHT - WATER_HEIGHT, GAME_WIDTH, WATER_HEIGHT))  # Rechteck zeichnen
 
-            time.sleep(0.005)
+            #time.sleep(0.005)
         except pygame.error as e:
             # Behandle spezifische Pygame-Fehler
             print(f"Pygame-Fehler: {e}")

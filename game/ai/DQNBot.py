@@ -6,9 +6,9 @@ from game.constants import PLAYER_MAX_VEC_X
 import game_state
 
 @dataclass
-class Easy(AI):
+class DQNBot(AI):
 
-    name = "Easy"
+    name = "DQN-Bot"
 
     def think(self, index: int):
         player = game_state.level_instance.getPlayerOne()

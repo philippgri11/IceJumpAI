@@ -1,7 +1,7 @@
 import random
 import time as timer
 
-from game.ai.Easy import Easy
+from game.ai.Hard import Hard
 from game.entities.block import Block
 from game.entities.player import Player
 from game.constants import GAME_SUDDEN_DEATH_TIME, GAME_WIDTH, PLAYER_WIDTH, GAME_HEIGHT
@@ -21,7 +21,7 @@ class Level:
             self.playerOne = Player("Human", GAME_WIDTH*1/4 - PLAYER_WIDTH/2, GAME_HEIGHT/2 - 50, 0)
         if self.playerTwo is None:
             self.playerTwo = Player("Second", GAME_WIDTH*3/4 - PLAYER_WIDTH/2, GAME_HEIGHT/2 - 50, 1)
-            self.playerTwo.setAI(Easy())
+            self.playerTwo.setAI(Hard())
 
     def init(self):
         self.createBlocks()
@@ -31,12 +31,12 @@ class Level:
 
     def changePlayer(self):
         if self.playerOne.ai is None:
-            self.playerOne.setAI(Easy())
+            self.playerOne.setAI(Hard())
             self.playerTwo.setAI(None)
             return 1
         else:
             self.playerOne.setAI(None)
-            self.playerTwo.setAI(Easy())
+            self.playerTwo.setAI(Hard())
             return 0
 
     def createBlocks(self):
