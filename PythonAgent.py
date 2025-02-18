@@ -1,15 +1,17 @@
-import time
-
 from typing import Optional
 
 import numpy as np
 import gymnasium as gym
+import time
 
 import game.main as myMain
 
 import pygame
 import math
 
+from game.ai.Easy import Easy
+from game.ai.Hard import Hard
+from game.ai.Middle import Middle
 from game.constants import GAME_WIDTH, GAME_HEIGHT, WATER_HEIGHT
 
 
@@ -33,6 +35,10 @@ class IceJumpEnv(gym.Env):
         self.entry_point = myMain
         self.entry_point.entry_point()
 
+        self.playAgainstEasy = False
+        self.playAgainstMiddle = False
+        self.playAgainstHard = False
+
         # Render-Modus speichern
         self.render_mode = render_mode
 
@@ -41,24 +47,32 @@ class IceJumpEnv(gym.Env):
         # Aktionen: float-Wert für die horizontale Geschwindigkeit
         #self.action_space = gym.spaces.Box(low=-0.16, high=0.16, shape=(1,), dtype=np.float32)
         self.action_space = gym.spaces.Discrete(3, start=0, seed=42)
+        self.easyBot = Easy()
+        self.middleBot = Middle()
+        self.hardBot = Hard()
 
         self.won = 0
         self.lose = 0
         self.waveX = 0
         self.waveY = 0
         # Beobachtungsraum:
-        # Spieler: 8 Werte
+        # Spieler: 9 Werte
         # Blocks: 40 * 3 = 120 Werte
         # Goodies: 5 * 3 = 15 Werte
         # Birds: 5 * 2 = 10 Werte
         # Gesamt: 10 + 120 + 15 + 10 = 155 Werte
         #self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32)
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8 + 3 * self.MAX_BLOCKS,), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(9 + 3 * self.MAX_BLOCKS,), dtype=np.float32)
 
         self.done = False
         self.last_y = None
         self.time_step = 0
         self.sumVec = 0
+        self.under = False
+        self.left = False
+        self.lastBlocksSize = 0
+        self.letzte_spiele = []
+        self.won_letzte_spiele = 0
 
         self.block_surface = self.create_rounded_rect_surface(30, 30, (255, 255, 255, 128), (255, 255, 255), 3, False)
         self.playerOne_surface = self.create_rounded_rect_surface(30, 30, (255, 0, 0), (0, 0, 0), 3, True)
@@ -80,6 +94,7 @@ class IceJumpEnv(gym.Env):
 
         self.entry_point.startGame()
 
+        self.under = False
         self.player_index = self.entry_point.changePlayers()
         if self.player_index > 1:
             self.player_index = 0
@@ -100,7 +115,19 @@ class IceJumpEnv(gym.Env):
         vec_x = float(action-1) * 0.16
         #print(vec_x, action)
         self.sumVec += vec_x
-        self.entry_point.setPlayerAction(self.player_index, vec_x)
+
+        if self.playAgainstEasy:
+            self.easyBot.think(self.player_index)
+            self.entry_point.setPlayerAction(self.player_index, self.easyBot.vecX)
+        elif self.playAgainstMiddle:
+            self.middleBot.think(self.player_index)
+            self.entry_point.setPlayerAction(self.player_index, self.middleBot.vecX)
+        elif self.playAgainstHard:
+            self.hardBot.think(self.player_index)
+            self.entry_point.setPlayerAction(self.player_index, self.hardBot.vecX)
+        else:
+            self.entry_point.setPlayerAction(self.player_index, vec_x)
+
         self.time_step += 1
 
         # Einen Schritt simulieren
@@ -110,94 +137,135 @@ class IceJumpEnv(gym.Env):
         obs = self._get_obs()
         self.done = self.entry_point.isGameOver()
 
+        if self.lastBlocksSize != self.entry_point.level.getBlocks().size:
+            self.lastBlocksSize = self.entry_point.level.getBlocks().size
+            #print("Anzahl Blocks und Position ", self.lastBlocksSize, obs[9])
+
         winner = myMain.winnerName()
 
         enemyIndex = 1
         if self.player_index == 1:
             enemyIndex = 0
         myPlayer = myMain.getPlayer(self.player_index)
+        player_x = obs[0]
+        player_y = obs[1]
+        player_vecX = obs[4]
+        player_vecY = obs[5]
         myEnemy = myMain.getPlayer(enemyIndex)
+        enemy_x = obs[2]
+        enemy_y = obs[3]
+        enemy_vecX = obs[6]
+        enemy_vecY = obs[7]
         width = self._normalize_pos_x(myPlayer.width)
         height = width
 
         found = False
 
+        foundBlockStart = -1
         addConstantX = self._normalize_pos_x(5)
-        #blocks = myMain.getLevel().getBlocks()
-        for i in range(8, 8 + 3 * self.MAX_BLOCKS, 3):
+        for i in range(9, 9 + 3 * self.MAX_BLOCKS, 3):
             bx = obs[i]
             by = obs[i+1]
             # ist der Spieler über einem Eisblock?
-            if (obs[0] + width - addConstantX > bx) and (obs[0] + addConstantX <= bx + width) and (obs[1] + height/2 < by) :
+            if (player_x + width - addConstantX > bx) and (player_x + addConstantX <= bx + width) and (player_y + height/2 < by) :
                 found = True
+                foundBlockStart = i
                 break
 
 
         # Schrittweise Belohnung für Zeit
         reward += 1 * self.time_step
 
-        # Wenn der Spieler zu nah am Rand ist, bestrafe ihn leicht
-        if myPlayer.x < 50 or myPlayer.x + myPlayer.width >= GAME_WIDTH - 50:
-            if myPlayer.x < 50:
-                reward -= 50 * abs(myPlayer.x - 50)
+        # Wenn der Spieler unter dem Gegner war, dann versuche mindestens 50 Pixel Abstand zu bekommen
+        # außerdem gehe immer nach Links außer du bist am Rand dann nach Rechts
+        if self.under:
+            distance = 35
+            changePosition = 50
+            if abs(myPlayer.x - myEnemy.x) > distance:
+                self.under = False
+            elif self.left:
+                if vec_x < 0 and (myPlayer.vecY < 0.1 or found):
+                    reward += 8000 + (myEnemy.x - myPlayer.x) * 200
+                else:
+                    reward -= 8000
+                if myPlayer.x < changePosition:
+                    self.left = False
             else:
-                reward -= 50 * abs(-myPlayer.x - myPlayer.width + GAME_WIDTH)
+                if vec_x > 0 and (myPlayer.vecY < 0.1 or found):
+                    reward += 8000 + (myPlayer.x - myEnemy.x) * 200
+                else:
+                    reward -= 8000
+                if myPlayer.x + myPlayer.width > GAME_WIDTH - changePosition:
+                    self.left = True
 
+
+        distanceplus = 0
+        isOverEnemy = False
+        enemyNear = False
         # Belohnung, wenn über dem Gegner oder Bestrafung, wenn unter dem Gegner
-        if myPlayer.x + myPlayer.width > myEnemy.x and myPlayer.x <= myEnemy.x + myPlayer.width:
+        if myPlayer.x + myPlayer.width + distanceplus > myEnemy.x and myPlayer.x - distanceplus <= myEnemy.x + myPlayer.width:
+            enemyNear = True
             if myPlayer.y + myPlayer.height/2 < myEnemy.y:
-                reward += 20000 - abs(myPlayer.x - myEnemy.x) * 50
+                reward += 20000 - abs(myPlayer.x - myEnemy.x) * 10
+                isOverEnemy = True
+            else:
+                reward -= 8000
 
-                # Belohnung für Annäherung an den Gegner
-                if vec_x > 0 and myPlayer.x < myEnemy.x:
+                reward += abs(myPlayer.x - myEnemy.x) * 100
+                self.under = True
+        if not isOverEnemy:
+            '''
+            distance = 100
+            enemyNear = False
+            if myPlayer.x + myPlayer.width - distance > myEnemy.x and myPlayer.x <= myEnemy.x + myPlayer.width + distance:
+                enemyNear = True
+                if (myPlayer.vecY < 0 or myPlayer.y + myPlayer.width < myEnemy.y) and ((vec_x > 0 and myPlayer.x < myEnemy.x) or (vec_x < 0 and myPlayer.x > myEnemy.x)):
                     reward += 3000
-                elif vec_x < 0 and myPlayer.x > myEnemy.x:
-                    reward += 3000
+            '''
 
-            if myPlayer.y > myEnemy.y + myEnemy.height:
-                reward -= 20000
-
-                # Belohnung um vom Gegner wegzukommen
-                if (vec_x > 0 and myPlayer.x > myEnemy.x) or (vec_x < 0 and myPlayer.x < myEnemy.x):
-                    reward += 5000
-        else:
-            # Bestrafung/Belohnung für Entfernung vom Gegner
-            distance = abs(myPlayer.x - myEnemy.x)
-            reward += myPlayer.width - distance  # Proportionale Strafe
-
-            # Wenn er sinkt, soll er auf einen Eisblock
-            #if myPlayer.vecY >= 0:
+            rewardBonus = 5000
+            if enemyNear:
+                rewardBonus = 0
             # Belohnung für Stabilität (auf Eisblock bleiben)
             if found:
-                reward += 5000
+                reward += 3000 + rewardBonus - abs(player_x - obs[foundBlockStart]) * GAME_WIDTH * 200
             else:
-                reward -= 10000  # Sofortige Strafe bei gefährlichem Verhalten
+                reward -= 8000  # Sofortige Strafe bei gefährlichem Verhalten
 
-            if not found:
-                if obs[8] < obs[0] and obs[4] < 0:
-                    reward += 2500
-                if obs[8] > obs[0] and obs[4] > 0:
-                    reward += 2500
+                if not enemyNear and myPlayer.y < 0 and ((vec_x > 0 and player_x < obs[foundBlockStart]) or (vec_x < 0 and player_x > obs[foundBlockStart])):
+                    reward += 2000 - abs(player_x - obs[foundBlockStart]) * GAME_WIDTH * 50
 
-            # Belohnung für Annäherung an den Gegner
-            if vec_x > 0 and myPlayer.x < myEnemy.x:
-                reward += 3000
-            elif vec_x < 0 and myPlayer.x > myEnemy.x:
-                reward += 3000
+            if myPlayer.vecY < 0 or myPlayer.y < myEnemy.y:
+                reward -= abs(myPlayer.x - myEnemy.x) * 30
+
+                if (vec_x > 0 and myPlayer.x < myEnemy.x) or (vec_x < 0 and myPlayer.x > myEnemy.x):
+                    if myPlayer.y < myEnemy.y:
+                        reward += 8000
+
+        #if self.entry_point.level.time % 100 == 0:
+        #    print("MAN ", vec_x, int(self.sumVec), int(reward), found)
 
         # Auswertung, wenn jemand gewonnen hat
         if self.done and winner is not None:
             player_name = myPlayer.getName()
+            if len(self.letzte_spiele) >= 100:
+                remove = self.letzte_spiele.pop(0)
+                self.won_letzte_spiele -= remove
             if winner == player_name:
                 self.won += 1
                 ratio = str(self.won) + " / " + str(self.lose+self.won)
-                reward = 200000
-                print("OMG OMG OMG, gewonnen gegen ", myEnemy.name, self.time_step, int(self.sumVec), int(myPlayer.x), int(myEnemy.x), ratio)
+                reward += 40000
+                self.letzte_spiele.append(1)
+                self.won_letzte_spiele += 1
+                last_100_ratio = str(self.won_letzte_spiele) + " / " + str(len(self.letzte_spiele))
+                print("OMG OMG OMG, gewonnen gegen ", myEnemy.name, self.time_step, int(self.sumVec), int(myPlayer.x), int(myEnemy.x), ratio, last_100_ratio)
             else:
                 self.lose += 1
+                self.letzte_spiele.append(0)
                 ratio = str(self.won) + " / " + str(self.lose+self.won)
-                print("Verloren ", winner, self.player_index, self.time_step, int(self.sumVec), int(myPlayer.x), int(myEnemy.x), ratio)
-                reward = -200000  # Konstante Strafe bei Verlust
+                last_100_ratio = str(self.won_letzte_spiele) + " / " + str(len(self.letzte_spiele))
+                print("Verloren ", winner, self.player_index, self.time_step, int(self.sumVec), int(myPlayer.x), int(myEnemy.x), ratio, last_100_ratio)
+                reward = -40000  # Konstante Strafe bei Verlust
 
         info = {}
         #print("reward ", reward, found, self.time_step, vec_x, obs)
@@ -288,7 +356,7 @@ class IceJumpEnv(gym.Env):
 
             #pygame.draw.rect(self.screen, (0, 182, 221), (0, GAME_HEIGHT - WATER_HEIGHT, GAME_WIDTH, WATER_HEIGHT))  # Rechteck zeichnen
 
-            #time.sleep(0.005)
+            time.sleep(0.005)
         except pygame.error as e:
             # Behandle spezifische Pygame-Fehler
             print(f"Pygame-Fehler: {e}")
@@ -331,6 +399,11 @@ class IceJumpEnv(gym.Env):
         y1 = self._normalize_pos_y(enemyPlayer.y)
         vecX1 = self._normalize_pos_y(enemyPlayer.vecX)
         vecY1 = self._normalize_pos_y(enemyPlayer.vecY)
+        underLeft = 0
+        if self.under:
+            underLeft = 1
+            if not self.left:
+                underLeft = 2
 
         obs_blocks = []
         sorted_blocks = sorted(self.entry_point.level.getBlocks(), key=lambda block: abs(block.x - aiPlayer.x))
@@ -343,7 +416,7 @@ class IceJumpEnv(gym.Env):
         while len(obs_blocks) < self.MAX_BLOCKS * 3:
             obs_blocks.append(-1.0)
 
-        obs_players = np.array([x0, y0, x1, y1, vecX0, vecY0, vecX1, vecY1], dtype=np.float32)
+        obs_players = np.array([x0, y0, x1, y1, vecX0, vecY0, vecX1, vecY1, underLeft], dtype=np.float32)
 
         return np.concatenate([obs_players,
                                np.array(obs_blocks[:3*self.MAX_BLOCKS], dtype=np.float32)])
