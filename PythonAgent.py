@@ -176,6 +176,9 @@ class IceJumpEnv(gym.Env):
         # Schrittweise Belohnung für Zeit
         reward += 1 * self.time_step
 
+        if myPlayer.y < myEnemy.y:
+            self.under = False
+
         # Wenn der Spieler unter dem Gegner war, dann versuche mindestens 50 Pixel Abstand zu bekommen
         # außerdem gehe immer nach Links außer du bist am Rand dann nach Rechts
         if self.under:
@@ -184,63 +187,62 @@ class IceJumpEnv(gym.Env):
             if abs(myPlayer.x - myEnemy.x) > distance:
                 self.under = False
             elif self.left:
-                if vec_x < 0 and (myPlayer.vecY < 0.1 or found):
-                    reward += 8000 + (myEnemy.x - myPlayer.x) * 200
+                if player_vecX < 0 and (myPlayer.vecY < 0.1 or found):
+                    reward += 8000
                 else:
-                    reward -= 8000
+                    if (not found) and ((player_vecX < 0 and player_x > obs[foundBlockStart]) or (player_vecX > 0 and player_x < obs[foundBlockStart])):
+                        reward += 2000
+                    else:
+                        reward -= 8000
+
                 if myPlayer.x < changePosition:
                     self.left = False
             else:
-                if vec_x > 0 and (myPlayer.vecY < 0.1 or found):
-                    reward += 8000 + (myPlayer.x - myEnemy.x) * 200
+                if player_vecX > 0 and (myPlayer.vecY < 0.1 or found):
+                    reward += 8000
                 else:
-                    reward -= 8000
+                    if (not found) and ((player_vecX < 0 and player_x > obs[foundBlockStart]) or (player_vecX > 0 and player_x < obs[foundBlockStart])):
+                        reward += 2000
+                    else:
+                        reward -= 8000
+
                 if myPlayer.x + myPlayer.width > GAME_WIDTH - changePosition:
                     self.left = True
-
-
-        distanceplus = 0
-        isOverEnemy = False
-        enemyNear = False
-        # Belohnung, wenn über dem Gegner oder Bestrafung, wenn unter dem Gegner
-        if myPlayer.x + myPlayer.width + distanceplus > myEnemy.x and myPlayer.x - distanceplus <= myEnemy.x + myPlayer.width:
-            enemyNear = True
-            if myPlayer.y + myPlayer.height/2 < myEnemy.y:
-                reward += 20000 - abs(myPlayer.x - myEnemy.x) * 10
-                isOverEnemy = True
-            else:
-                reward -= 8000
-
-                reward += abs(myPlayer.x - myEnemy.x) * 100
-                self.under = True
-        if not isOverEnemy:
-            '''
-            distance = 100
+        else:
             enemyNear = False
-            if myPlayer.x + myPlayer.width - distance > myEnemy.x and myPlayer.x <= myEnemy.x + myPlayer.width + distance:
-                enemyNear = True
-                if (myPlayer.vecY < 0 or myPlayer.y + myPlayer.width < myEnemy.y) and ((vec_x > 0 and myPlayer.x < myEnemy.x) or (vec_x < 0 and myPlayer.x > myEnemy.x)):
-                    reward += 3000
-            '''
+            # Belohnung, wenn über dem Gegner oder Bestrafung, wenn unter dem Gegner
+            if (player_x + width >= enemy_x) and (player_x <= enemy_x + width):
+                if player_y + height/2 < enemy_y:
+                    enemyNear = True
+                    reward += 20000
 
-            rewardBonus = 5000
-            if enemyNear:
-                rewardBonus = 0
-            # Belohnung für Stabilität (auf Eisblock bleiben)
-            if found:
-                reward += 3000 + rewardBonus - abs(player_x - obs[foundBlockStart]) * GAME_WIDTH * 200
-            else:
-                reward -= 8000  # Sofortige Strafe bei gefährlichem Verhalten
+                    if (player_vecX > 0 and player_x < enemy_x) or (player_vecX < 0 and player_x > enemy_x):
+                        reward += 4000
+                else:
+                    reward -= 8000
 
-                if not enemyNear and myPlayer.y < 0 and ((vec_x > 0 and player_x < obs[foundBlockStart]) or (vec_x < 0 and player_x > obs[foundBlockStart])):
-                    reward += 2000 - abs(player_x - obs[foundBlockStart]) * GAME_WIDTH * 50
+                    self.under = True
+            if not enemyNear:
 
-            if myPlayer.vecY < 0 or myPlayer.y < myEnemy.y:
-                reward -= abs(myPlayer.x - myEnemy.x) * 30
-
-                if (vec_x > 0 and myPlayer.x < myEnemy.x) or (vec_x < 0 and myPlayer.x > myEnemy.x):
-                    if myPlayer.y < myEnemy.y:
+                goToEnemy = False
+                if myPlayer.vecY < 0.1 or found or player_y < enemy_y:
+                    #if (myPlayer.y - myEnemy.y < myPlayer.height) or (abs(myPlayer.x - myEnemy.x) > myPlayer.width):
+                    if (player_vecX > 0 and (player_x < enemy_x)) or (player_vecX < 0 and (player_x > enemy_x)):
                         reward += 8000
+                        goToEnemy = True
+                if not goToEnemy:
+                    # Belohnung für Stabilität (auf Eisblock bleiben)
+                    if found:
+                        reward += 4000
+
+                        if (player_vecX > 0 and player_x < obs[foundBlockStart]) or (player_vecX < 0 and player_x > obs[foundBlockStart]):
+                            reward += 4000
+
+                    else:
+                        if ((player_vecX > 0) and (player_x < obs[foundBlockStart])) or ((player_vecX < 0) and (player_x > obs[foundBlockStart])):
+                            reward += 4000
+                        else:
+                            reward -= 8000  # Sofortige Strafe bei gefährlichem Verhalten
 
         #if self.entry_point.level.time % 100 == 0:
         #    print("MAN ", vec_x, int(self.sumVec), int(reward), found)
@@ -352,11 +354,12 @@ class IceJumpEnv(gym.Env):
             if self.waveX >= 90:
                 self.waveX = 0
 
+
             self.screen.blit(self.waveSurface, (-self.waveX, GAME_HEIGHT - WATER_HEIGHT - 32))
 
             #pygame.draw.rect(self.screen, (0, 182, 221), (0, GAME_HEIGHT - WATER_HEIGHT, GAME_WIDTH, WATER_HEIGHT))  # Rechteck zeichnen
 
-            time.sleep(0.005)
+            #time.sleep(0.005)
         except pygame.error as e:
             # Behandle spezifische Pygame-Fehler
             print(f"Pygame-Fehler: {e}")
