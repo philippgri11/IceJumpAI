@@ -17,6 +17,12 @@ def startGame():
 def changePlayers():
     return level.changePlayer()
 
+def changeAI():
+    level.playerAIChose += 1
+    if level.playerAIChose > 3:
+        level.playerAIChose = 0
+
+
 def step():
     level.think(10)
 

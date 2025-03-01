@@ -30,8 +30,7 @@ class IceJumpEnv(gym.Env):
 
     def __init__(self, player_index=0, render_mode=None):
         super(IceJumpEnv, self).__init__()
-        # Py4J Gateway
-        #self.gateway = JavaGateway()
+
         self.entry_point = myMain
         self.entry_point.entry_point()
 
@@ -94,6 +93,8 @@ class IceJumpEnv(gym.Env):
 
         self.entry_point.startGame()
 
+        if self.player_index == 1:
+            self.entry_point.changeAI()
         self.under = False
         self.player_index = self.entry_point.changePlayers()
         if self.player_index > 1:
@@ -359,7 +360,7 @@ class IceJumpEnv(gym.Env):
 
             #pygame.draw.rect(self.screen, (0, 182, 221), (0, GAME_HEIGHT - WATER_HEIGHT, GAME_WIDTH, WATER_HEIGHT))  # Rechteck zeichnen
 
-            #time.sleep(0.005)
+            time.sleep(0.005)
         except pygame.error as e:
             # Behandle spezifische Pygame-Fehler
             print(f"Pygame-Fehler: {e}")

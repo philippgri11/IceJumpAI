@@ -4,6 +4,7 @@ import time as timer
 from game.ai.Easy import Easy
 from game.ai.Hard import Hard
 from game.ai.Middle import Middle
+from game.ai.TrainedBot import TrainedBot
 from game.entities.block import Block
 from game.entities.player import Player
 from game.constants import GAME_SUDDEN_DEATH_TIME, GAME_WIDTH, PLAYER_WIDTH, GAME_HEIGHT
@@ -16,6 +17,7 @@ class Level:
     playerOne: Player = None
     playerTwo: Player = None
     time: int = 0
+    playerAIChose: int = 0 #0 = Easy, 1 = Middle, 2 = Hard, 3 = TrainedBot
 
     def __init__(self):
         game_state.level_instance = self
@@ -23,7 +25,7 @@ class Level:
             self.playerOne = Player("Human", GAME_WIDTH*1/4 - PLAYER_WIDTH/2, GAME_HEIGHT/2 - 50, 0)
         if self.playerTwo is None:
             self.playerTwo = Player("Second", GAME_WIDTH*3/4 - PLAYER_WIDTH/2, GAME_HEIGHT/2 - 100, 1)
-            self.playerTwo.setAI(Hard())
+            self.playerTwo.setAI(self.getAI())
 
     def init(self):
         self.createBlocks()
@@ -33,13 +35,24 @@ class Level:
 
     def changePlayer(self):
         if self.playerOne.ai is None:
-            self.playerOne.setAI(Hard())
+            self.playerOne.setAI(self.getAI())
             self.playerTwo.setAI(None)
             return 1
         else:
             self.playerOne.setAI(None)
-            self.playerTwo.setAI(Hard())
+            self.playerTwo.setAI(self.getAI())
             return 0
+
+    def getAI(self):
+        if self.playerAIChose == 0:
+            return Easy()
+        elif self.playerAIChose == 1:
+            return Middle()
+        elif self.playerAIChose == 2:
+            return Hard()
+        elif self.playerAIChose == 3:
+            return TrainedBot()
+        return Easy()
 
     def createBlocks(self):
         rand = random.Random((int)(timer.time()))
@@ -48,6 +61,8 @@ class Level:
         for i in range(count):
             arr = Block()
             block_array.append(arr)
+        block_array[0].x = GAME_WIDTH*1/4 - PLAYER_WIDTH/2
+        block_array[1].x = GAME_WIDTH*3/4 - PLAYER_WIDTH/2
         self.blocks = np.array(block_array)
 
     def getBlocks(self):

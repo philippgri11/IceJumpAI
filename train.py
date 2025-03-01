@@ -45,9 +45,9 @@ model = DQN(
 )
 '''
 model = DQN.load(
-    "models/DQN_1739815801/4700000.zip",
+    "models/DQN_1740814089/3500000.zip",
     env,
-    batch_size=4096,               # Größere Batch-Größe
+    batch_size=8192,               # Größere Batch-Größe
     train_freq=128,                # Weniger häufiges Training
     gradient_steps=64,             # Mehr Gradientenschritte pro Aktualisierung
     buffer_size=1000000,           # Größerer Replay-Buffer
@@ -61,14 +61,13 @@ model = DQN.load(
 
 
 if training:
-    TIMESTAMP = 10000
+    TIMESTAMP = 100000
     index = 0
     for i in range(1,30000):
         model.learn(total_timesteps=TIMESTAMP, reset_num_timesteps=False, tb_log_name=modelName+"_"+str(myTime))
         index = i
         # Modell speichern
-        if i % 10 == 0:
-            model.save(f"{models_dir}/{TIMESTAMP*i}")
+        model.save(f"{models_dir}/{TIMESTAMP*i}")
 
     model.save(f"{models_dir}/{TIMESTAMP*index}")
 else:
@@ -78,10 +77,10 @@ else:
     n_eval_episodes = 100
     episode_rewards = []
 
-    env = model.get_env()
+    #env = model.get_env()
 
     for i in range(n_eval_episodes):
-        obs = env.reset()
+        obs, info = env.reset()
         done = False
         total_reward = 0.0
         while not done:
@@ -95,7 +94,7 @@ else:
             env.render()
             # Aktion vorhersagen (ohne Lernmodus, nur inferieren)
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = env.step(action)
+            obs, reward, done, terminate, info = env.step(action)
 
             total_reward += reward
         episode_rewards.append(total_reward)
